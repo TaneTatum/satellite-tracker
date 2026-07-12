@@ -1,0 +1,38 @@
+{
+  "name": "satellite-tracker",
+  "author": "Tane Tatum",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {
+    "@rebble/clay": "^1.0.8",
+    "satellite.js": "^5.0.0"
+  },
+  "pebble": {
+    "displayName": "Satellite Tracker",
+    "uuid": "c00888c4-c237-4ded-a058-537bb1151229",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": ["emery"],
+    "watchapp": {
+      "watchface": true
+    },
+    "capabilities": ["configurable"],
+    "messageKeys": [
+      "NoradId",
+      "ShowLatLon",
+      "ShowAltitude",
+      "ShowTrail",
+      "REQUEST_POSITIONS",
+      "SatName",
+      "BatchStartEpoch",
+      "BatchCount",
+      "LatArray",
+      "LonArray",
+      "AltArray"
+    ],
+    "resources": {
+      "media": []
+    }
+  }
+}
