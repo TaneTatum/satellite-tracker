@@ -22,3 +22,8 @@ void draw_spaced_text(GContext *ctx, const char *text, GFont font, GRect box,
 // across subsequent segments so the dash pattern stays continuous.
 void draw_dashed_segment(GContext *ctx, GPoint p0, GPoint p1,
                           int16_t dash_px, int16_t gap_px, int32_t *phase_px);
+
+// Exact integer square root (digit-by-digit method) — used in place of
+// libm's sqrtf, which pulls in the same trig/reduction machinery that
+// hard-faults on real hardware (see map_layer.c).
+uint32_t isqrt32(uint32_t n);

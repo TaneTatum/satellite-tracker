@@ -1,7 +1,6 @@
 #include "draw_utils.h"
 #include "app_state.h"
 
-#include <math.h>
 #include <string.h>
 
 GPoint project_latlon_e2(int32_t lat_e2, int32_t lon_e2) {
@@ -40,28 +39,44 @@ void draw_spaced_text(GContext *ctx, const char *text, GFont font, GRect box,
   }
 }
 
+uint32_t isqrt32(uint32_t n) {
+  uint32_t res = 0;
+  uint32_t bit = 1u << 30;  // second-to-top bit set, for a 32-bit operand
+  while (bit > n) bit >>= 2;
+  while (bit != 0) {
+    if (n >= res + bit) {
+      n -= res + bit;
+      res = (res >> 1) + bit;
+    } else {
+      res >>= 1;
+    }
+    bit >>= 2;
+  }
+  return res;
+}
+
 void draw_dashed_segment(GContext *ctx, GPoint p0, GPoint p1,
                           int16_t dash_px, int16_t gap_px, int32_t *phase_px) {
-  int16_t dx = (int16_t)(p1.x - p0.x);
-  int16_t dy = (int16_t)(p1.y - p0.y);
-  float seg_len = sqrtf((float)(dx * dx + dy * dy));
-  if (seg_len < 1.0f) return;
+  int32_t dx = p1.x - p0.x;
+  int32_t dy = p1.y - p0.y;
+  int32_t seg_len = (int32_t)isqrt32((uint32_t)(dx * dx + dy * dy));
+  if (seg_len < 1) return;
 
   int32_t period = dash_px + gap_px;
-  float traveled = 0.0f;
+  int32_t traveled = 0;
   while (traveled < seg_len) {
     int32_t pos = (*phase_px) % period;
     bool on = pos < dash_px;
-    float step = on ? (float)(dash_px - pos) : (float)(period - pos);
+    int32_t step = on ? (dash_px - pos) : (period - pos);
     if (traveled + step > seg_len) step = seg_len - traveled;
     if (on) {
-      float t0 = traveled / seg_len;
-      float t1 = (traveled + step) / seg_len;
-      graphics_draw_line(ctx,
-          GPoint((int16_t)(p0.x + dx * t0), (int16_t)(p0.y + dy * t0)),
-          GPoint((int16_t)(p0.x + dx * t1), (int16_t)(p0.y + dy * t1)));
+      GPoint a = GPoint((int16_t)(p0.x + dx * traveled / seg_len),
+                         (int16_t)(p0.y + dy * traveled / seg_len));
+      GPoint b = GPoint((int16_t)(p0.x + dx * (traveled + step) / seg_len),
+                         (int16_t)(p0.y + dy * (traveled + step) / seg_len));
+      graphics_draw_line(ctx, a, b);
     }
     traveled += step;
-    *phase_px += (int32_t)step;
+    *phase_px += step;
   }
 }

@@ -2,10 +2,22 @@
 #include "app_state.h"
 #include "draw_utils.h"
 
-#include <math.h>
+// Deliberately no <math.h> here. libm's float trig (tanf/cosf/acosf) calls
+// into newlib's __ieee754_rem_pio2f for argument reduction, which hard-
+// faults on real Emery hardware (confirmed via `pebble logs` app-fault
+// PC/LR symbolication landing squarely inside that routine) even though it
+// runs fine under the QEMU emulator. Pebble's own fixed-point
+// sin_lookup()/cos_lookup()/atan2_lookup() sidestep that code path
+// entirely and are the standard way to do trig on-watch.
 
-#define DEG_TO_RAD_F 0.0174532925f
-#define RAD_TO_DEG_F 57.2957795f
+static int32_t deg_to_trig(float deg) {
+  return (int32_t)(deg * (float)TRIG_MAX_ANGLE / 360.0f);
+}
+
+static float tan_deg(float deg) {
+  int32_t angle = deg_to_trig(deg);
+  return (float)sin_lookup(angle) / (float)cos_lookup(angle);
+}
 
 static GBitmap *s_map_bitmap;
 
@@ -14,10 +26,21 @@ static GBitmap *s_map_bitmap;
 // Latitudes are pre-clamped to +-85 by the caller to avoid the pole
 // singularity in tan(lat).
 static float terminator_lon_deg(float lon_ss_deg, float decl_deg, float lat_deg) {
-  float cos_arg = -tanf(lat_deg * DEG_TO_RAD_F) * tanf(decl_deg * DEG_TO_RAD_F);
+  float cos_arg = -tan_deg(lat_deg) * tan_deg(decl_deg);
   if (cos_arg > 1.0f) cos_arg = 1.0f;
   if (cos_arg < -1.0f) cos_arg = -1.0f;
-  float hour_angle_deg = acosf(cos_arg) * RAD_TO_DEG_F;
+
+  // hour_angle = acos(cos_arg), via atan2(sin_arg, cos_arg) since sin_arg
+  // (the hour angle is always in [0,180]) is never negative. sin_arg is
+  // computed with the integer isqrt rather than sqrtf for the same reason
+  // trig above avoids libm.
+  float sin_sq = 1.0f - cos_arg * cos_arg;
+  if (sin_sq < 0.0f) sin_sq = 0.0f;
+  float sin_arg = (float)isqrt32((uint32_t)(sin_sq * 1000000.0f)) / 1000.0f;
+
+  int32_t hour_angle_units = atan2_lookup((int16_t)(sin_arg * 10000.0f), (int16_t)(cos_arg * 10000.0f));
+  float hour_angle_deg = (float)hour_angle_units * 360.0f / (float)TRIG_MAX_ANGLE;
+
   return lon_ss_deg + hour_angle_deg;
 }
 
@@ -27,7 +50,8 @@ static void draw_night_terminator(GContext *ctx) {
   if (!utc) return;
 
   float n = (float)(utc->tm_yday + 1) + utc->tm_hour / 24.0f;
-  float decl = -23.44f * cosf(DEG_TO_RAD_F * (360.0f / 365.24f) * (n + 10.0f));
+  int32_t decl_angle = deg_to_trig((360.0f / 365.24f) * (n + 10.0f));
+  float decl = -23.44f * ((float)cos_lookup(decl_angle) / (float)TRIG_MAX_RATIO);
 
   float utc_hours = utc->tm_hour + utc->tm_min / 60.0f;
   float lon_ss = 15.0f * (12.0f - utc_hours);
