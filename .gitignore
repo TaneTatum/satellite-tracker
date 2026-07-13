@@ -16,3 +16,11 @@ screenshot_emery.png
 icon_80x80.png
 icon_144x144.png
 screenshots/
+
+# Design-tool export (mockup/build-plan reference, not source) and the raw
+# Natural Earth dataset (large-ish fetched data; regenerate via the curl
+# command documented at the top of tools/generate_map.py) — the *output*
+# resources/images/world_map.png this produces IS committed, since pebble
+# build needs it directly.
+Pebble satellite tracker redesign.zip
+tools/data/

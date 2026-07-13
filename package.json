@@ -1,7 +1,7 @@
 {
   "name": "satellite-tracker",
   "author": "Tane Tatum",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "keywords": ["pebble-app"],
   "private": true,
   "dependencies": {
@@ -32,7 +32,14 @@
       "AltArray"
     ],
     "resources": {
-      "media": []
+      "media": [
+        { "type": "bitmap", "name": "IMAGE_WORLD_MAP", "file": "images/world_map.png" },
+        { "type": "font", "name": "FONT_JBMONO_BOLD_12", "file": "fonts/JetBrainsMono-Bold.ttf" },
+        { "type": "font", "name": "FONT_JBMONO_REGULAR_8", "file": "fonts/JetBrainsMono-Regular.ttf" },
+        { "type": "font", "name": "FONT_JBMONO_BOLD_13", "file": "fonts/JetBrainsMono-Bold.ttf" },
+        { "type": "font", "name": "FONT_JBMONO_BOLD_36", "file": "fonts/JetBrainsMono-Bold.ttf" },
+        { "type": "font", "name": "FONT_JBMONO_REGULAR_9", "file": "fonts/JetBrainsMono-Regular.ttf" }
+      ]
     }
   }
 }
