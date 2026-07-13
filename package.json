@@ -1,7 +1,7 @@
 {
   "name": "satellite-tracker",
   "author": "Tane Tatum",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "keywords": ["pebble-app"],
   "private": true,
   "dependencies": {
@@ -27,6 +27,7 @@
       "SatName",
       "BatchStartEpoch",
       "BatchCount",
+      "NowIndex",
       "LatArray",
       "LonArray",
       "AltArray"

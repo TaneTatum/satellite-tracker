@@ -2,9 +2,12 @@
  * PebbleKit JS — Satellite Tracker
  *
  * Fetches TLE data from CelesTrak for the configured NORAD ID, propagates it
- * with satellite.js (SGP4/SDP4), and sends a batch of future minute-by-minute
- * positions to the watch. The watch steps through the batch locally once a
- * minute and only asks for a refill roughly once per BATCH_SIZE minutes.
+ * with satellite.js (SGP4/SDP4), and sends the watch one window of minute-
+ * by-minute positions spanning PAST_MIN minutes before "now" through
+ * FUTURE_MIN minutes after, plus NowIndex marking where "now" falls in that
+ * array. The watch steps a pointer through the window locally once a minute
+ * (past history is already precomputed, not accumulated live) and only asks
+ * for a refill roughly once per window (~every FUTURE_MIN minutes).
  */
 
 var Clay = require('@rebble/clay');
@@ -12,7 +15,8 @@ var clayConfig = require('./config');
 var clay = new Clay(clayConfig);
 var satellite = require('satellite.js');
 
-var BATCH_SIZE = 16;
+var PAST_MIN = 45;
+var FUTURE_MIN = 45;
 var TLE_STALE_MS = 20 * 60 * 60 * 1000; // refetch at most ~once/day
 var DEFAULT_NORAD_ID = 25544; // ISS (ZARYA)
 
@@ -68,25 +72,51 @@ function fetchTLE(noradId, cb) {
 
 function computeBatch(tle) {
   var satrec = satellite.twoline2satrec(tle.line1, tle.line2);
-  var lats = [], lons = [], alts = [];
-  var startEpoch = Math.floor(Date.now() / 1000);
-  var i;
-  for (i = 0; i < BATCH_SIZE; i++) {
-    var date = new Date(Date.now() + i * 60000);
+  var nowMs = Date.now();
+
+  function sampleAt(offsetMin) {
+    var date = new Date(nowMs + offsetMin * 60000);
     var pv = satellite.propagate(satrec, date);
-    if (!pv || !pv.position) break; // decayed/invalid TLE — stop batch early
+    if (!pv || !pv.position) return null; // decayed/invalid TLE for this offset
     var gmst = satellite.gstime(date);
     var geo = satellite.eciToGeodetic(pv.position, gmst);
-    lats.push(Math.round(satellite.degreesLat(geo.latitude) * 100));
-    lons.push(Math.round(satellite.degreesLong(geo.longitude) * 100));
-    alts.push(Math.max(0, Math.round(geo.height)));
+    return {
+      lat: Math.round(satellite.degreesLat(geo.latitude) * 100),
+      lon: Math.round(satellite.degreesLong(geo.longitude) * 100),
+      alt: Math.max(0, Math.round(geo.height))
+    };
   }
+
+  // Walk outward from "now" on each side so a TLE that can't quite cover
+  // the full window still keeps as much of the near-term history/forecast
+  // as possible, dropping only the far edge.
+  var pastRev = []; // nearest-to-now first (offset -1, -2, ...)
+  var p;
+  for (p = 1; p <= PAST_MIN; p++) {
+    var ps = sampleAt(-p);
+    if (!ps) break;
+    pastRev.push(ps);
+  }
+  var pastSamples = pastRev.reverse(); // chronological: oldest (-PAST_MIN) ... -1
+
+  var futureSamples = [];
+  var f;
+  for (f = 0; f <= FUTURE_MIN; f++) {
+    var fs = sampleAt(f);
+    if (!fs) break;
+    futureSamples.push(fs);
+  }
+
+  var nowIndex = pastSamples.length;
+  var all = pastSamples.concat(futureSamples);
+
   return {
     name: tle.name.substring(0, 19),
-    startEpoch: startEpoch,
-    lats: lats,
-    lons: lons,
-    alts: alts
+    startEpoch: Math.floor((nowMs - pastSamples.length * 60000) / 1000),
+    nowIndex: nowIndex,
+    lats: all.map(function (s) { return s.lat; }),
+    lons: all.map(function (s) { return s.lon; }),
+    alts: all.map(function (s) { return s.alt; })
   };
 }
 
@@ -95,13 +125,14 @@ function sendBatch(batch) {
     'SatName': batch.name,
     'BatchStartEpoch': batch.startEpoch,
     'BatchCount': batch.lats.length,
+    'NowIndex': batch.nowIndex,
     'LatArray': packInt16Array(batch.lats),
     'LonArray': packInt16Array(batch.lons),
     'AltArray': packInt16Array(batch.alts)
   };
   Pebble.sendAppMessage(dict,
-    function () { console.log('Position batch sent (' + batch.lats.length + ' entries)'); },
-    function () { console.log('Position batch send failed'); }
+    function () { console.log('Position window sent (' + batch.lats.length + ' entries, now @ ' + batch.nowIndex + ')'); },
+    function () { console.log('Position window send failed'); }
   );
 }
 

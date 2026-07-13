@@ -107,23 +107,25 @@ static void draw_graticule(GContext *ctx) {
 
 static void draw_ground_track(GContext *ctx) {
   if (!settings.ShowTrail) return;
+  if (!s_have_data || s_batch.count < 2) return;
 
   graphics_context_set_stroke_color(ctx, COLOR_BRIGHT);
   graphics_context_set_stroke_width(ctx, 1);
 
-  // Past track (solid) — s_trail already holds screen-space points ending
-  // at the current position.
-  if (s_trail.count >= 2) {
-    for (uint8_t i = 0; i < s_trail.count - 1; i++) {
-      GPoint a = s_trail.points[(s_trail.head + i) % TRAIL_MAX_POINTS];
-      GPoint b = s_trail.points[(s_trail.head + i + 1) % TRAIL_MAX_POINTS];
-      graphics_draw_line(ctx, a, b);
+  // Past track (solid) — indices [0, s_batch_index], precomputed by the
+  // phone alongside the future half, so full history is available
+  // immediately rather than needing to accumulate live minute by minute.
+  if (s_batch_index >= 1) {
+    GPoint prev = project_latlon_e2(s_batch.lat_e2[0], s_batch.lon_e2[0]);
+    for (uint8_t i = 1; i <= s_batch_index; i++) {
+      GPoint next = project_latlon_e2(s_batch.lat_e2[i], s_batch.lon_e2[i]);
+      graphics_draw_line(ctx, prev, next);
+      prev = next;
     }
   }
 
-  // Future track (dashed) — remaining batch entries beyond "now", already
-  // precomputed by the phone, starting from the current marker position.
-  if (s_have_data && s_batch.count > (uint8_t)(s_batch_index + 1)) {
+  // Future track (dashed) — indices [s_batch_index, count-1].
+  if (s_batch.count > (uint8_t)(s_batch_index + 1)) {
     int32_t phase = 0;
     GPoint prev = project_latlon_e2(s_batch.lat_e2[s_batch_index], s_batch.lon_e2[s_batch_index]);
     for (uint8_t i = s_batch_index + 1; i < s_batch.count; i++) {

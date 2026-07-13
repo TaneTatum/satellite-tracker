@@ -3,10 +3,13 @@
  *
  * Shows a configurable satellite's live position on a world map. Orbit
  * propagation (SGP4) runs on the phone via PebbleKit JS (src/pkjs/index.js),
- * which sends a batch of ~16 future minute-by-minute positions over
- * AppMessage. The watch just steps through the local batch once a minute —
- * no orbital math or TLE parsing happens here, and the phone is only woken
- * roughly once per batch window instead of every minute.
+ * which sends one window of minute-by-minute positions spanning 45 minutes
+ * into the past through 45 minutes into the future over AppMessage. The
+ * watch just steps a pointer through the local window once a minute — no
+ * orbital math or TLE parsing happens here, and the phone is only woken
+ * roughly once per window (~every 45 min) instead of every minute. Because
+ * the past half of the window is precomputed too, the ground track's past
+ * history is available immediately rather than needing to accumulate live.
  *
  * Drawing is split across draw_utils.c (shared primitives), map_layer.c
  * (bitmap map + night terminator + ground track + marker), and
@@ -27,7 +30,6 @@
 ClaySettings settings;
 PositionBatch s_batch;
 uint8_t s_batch_index;
-OrbitTrail s_trail;
 bool s_have_data;
 char s_sat_name[24];
 
@@ -37,20 +39,6 @@ static Layer *s_telemetry_layer;
 static Layer *s_map_layer;
 static Layer *s_footer_layer;
 static bool s_request_pending;
-
-// ============================================================================
-// TRAIL
-// ============================================================================
-
-static void trail_push(GPoint p) {
-  uint8_t idx = (s_trail.head + s_trail.count) % TRAIL_MAX_POINTS;
-  s_trail.points[idx] = p;
-  if (s_trail.count < TRAIL_MAX_POINTS) {
-    s_trail.count++;
-  } else {
-    s_trail.head = (s_trail.head + 1) % TRAIL_MAX_POINTS;
-  }
-}
 
 // ============================================================================
 // SETTINGS PERSISTENCE
@@ -92,12 +80,14 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
     if (s_batch_index < s_batch.count - 1) {
       s_batch_index++;
     }
-    GPoint p = project_latlon_e2(s_batch.lat_e2[s_batch_index], s_batch.lon_e2[s_batch_index]);
-    trail_push(p);
     layer_mark_dirty(s_telemetry_layer);
     layer_mark_dirty(s_map_layer);
 
-    uint8_t low_water = s_batch.count > 2 ? (uint8_t)(s_batch.count - 2) : 0;
+    // Refill once we're a few minutes from running out of precomputed
+    // future — with a ~45-minute future half this happens roughly once
+    // every ~42 minutes rather than every ~14, since the window is much
+    // bigger than the old 16-entry batch.
+    uint8_t low_water = s_batch.count > 3 ? (uint8_t)(s_batch.count - 3) : 0;
     if (s_batch_index >= low_water && !s_request_pending) {
       request_positions();
     }
@@ -142,8 +132,6 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     s_have_data = false;
     s_batch.count = 0;
     s_batch_index = 0;
-    s_trail.count = 0;
-    s_trail.head = 0;
     s_sat_name[0] = '\0';
     layer_mark_dirty(s_chrome_layer);
     layer_mark_dirty(s_telemetry_layer);
@@ -168,7 +156,7 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     uint16_t avail_lat = lat_arr_t->length / 2;
     uint16_t avail_lon = lon_arr_t->length / 2;
     uint16_t avail_alt = alt_arr_t->length / 2;
-    if (count > POSITION_BATCH_SIZE) count = POSITION_BATCH_SIZE;
+    if (count > WINDOW_SIZE) count = WINDOW_SIZE;
     if (count > avail_lat) count = (uint8_t)avail_lat;
     if (count > avail_lon) count = (uint8_t)avail_lon;
     if (count > avail_alt) count = (uint8_t)avail_alt;
@@ -195,15 +183,18 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
       s_batch.alt_km[i] = (uint16_t)(lo | (hi << 8));
     }
     s_batch.count = count;
-    s_batch_index = 0;
     s_have_data = (count > 0);
+
+    Tuple *now_idx_t = dict_find(iterator, MESSAGE_KEY_NowIndex);
+    uint8_t now_index = now_idx_t ? now_idx_t->value->uint8 : 0;
+    if (count > 0 && now_index >= count) now_index = (uint8_t)(count - 1);
+    s_batch.now_index = now_index;
+    s_batch_index = now_index;
 
     Tuple *epoch_t = dict_find(iterator, MESSAGE_KEY_BatchStartEpoch);
     if (epoch_t) s_batch.batch_start_epoch = epoch_t->value->uint32;
 
     if (s_have_data) {
-      GPoint p = project_latlon_e2(s_batch.lat_e2[0], s_batch.lon_e2[0]);
-      trail_push(p);
       layer_mark_dirty(s_telemetry_layer);
       layer_mark_dirty(s_map_layer);
     }
@@ -277,7 +268,10 @@ static void init(void) {
   app_message_register_inbox_dropped(inbox_dropped_callback);
   app_message_register_outbox_failed(outbox_failed_callback);
   app_message_register_outbox_sent(outbox_sent_callback);
-  app_message_open(512, 256);
+  // Inbox sized for a 91-entry position window (3 int16 arrays, ~550 bytes)
+  // plus name/epoch/count/index fields and tuple overhead — comfortably
+  // under this with headroom.
+  app_message_open(1024, 256);
 
   // Ask the phone for an initial batch right away.
   request_positions();

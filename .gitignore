@@ -13,6 +13,7 @@ Thumbs.db
 # Generated deliverables (regenerate via `pebble build`, `pebble screenshot`,
 # and scripts/create_app_icons.py) — not source, kept out of the repo.
 screenshot_emery.png
+emery_screenshot*.png
 icon_80x80.png
 icon_144x144.png
 screenshots/
