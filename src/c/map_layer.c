@@ -105,6 +105,16 @@ static void draw_graticule(GContext *ctx) {
                        GPoint(MAP_X + MAP_W / 2, MAP_Y + MAP_H), 2, 2, &phase);
 }
 
+// True if consecutive minute-by-minute points jumped further sideways than
+// any real orbit could move in a minute — i.e. the satellite crossed the
+// +/-180 degree antimeridian and project_latlon_e2 wrapped from one edge of
+// the map back to the other, rather than actually having moved there.
+static bool is_map_wrap(GPoint a, GPoint b) {
+  int16_t dx = b.x - a.x;
+  if (dx < 0) dx = (int16_t)-dx;
+  return dx > MAP_W / 2;
+}
+
 static void draw_ground_track(GContext *ctx) {
   if (!settings.ShowTrail) return;
   if (!s_have_data || s_batch.count < 2) return;
@@ -119,7 +129,9 @@ static void draw_ground_track(GContext *ctx) {
     GPoint prev = project_latlon_e2(s_batch.lat_e2[0], s_batch.lon_e2[0]);
     for (uint8_t i = 1; i <= s_batch_index; i++) {
       GPoint next = project_latlon_e2(s_batch.lat_e2[i], s_batch.lon_e2[i]);
-      graphics_draw_line(ctx, prev, next);
+      if (!is_map_wrap(prev, next)) {
+        graphics_draw_line(ctx, prev, next);
+      }
       prev = next;
     }
   }
@@ -130,7 +142,11 @@ static void draw_ground_track(GContext *ctx) {
     GPoint prev = project_latlon_e2(s_batch.lat_e2[s_batch_index], s_batch.lon_e2[s_batch_index]);
     for (uint8_t i = s_batch_index + 1; i < s_batch.count; i++) {
       GPoint next = project_latlon_e2(s_batch.lat_e2[i], s_batch.lon_e2[i]);
-      draw_dashed_segment(ctx, prev, next, 2, 2, &phase);
+      if (is_map_wrap(prev, next)) {
+        phase = 0;  // reset dash phase so the new segment starts on a dash
+      } else {
+        draw_dashed_segment(ctx, prev, next, 2, 2, &phase);
+      }
       prev = next;
     }
   }
