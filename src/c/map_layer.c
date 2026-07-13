@@ -43,14 +43,28 @@ static void draw_night_terminator(GContext *ctx) {
   float x_ss = (lon_ss + 180.0f) * MAP_W / 360.0f;
   bool night_on_right = x_ss < (MAP_W / 2.0f);
 
-  graphics_context_set_stroke_color(ctx, COLOR_BG);
-  for (int16_t y = 0; y < MAP_H; y++) {
+  // Horizontal-line dither (alternating scanlines) rather than a per-pixel
+  // checkerboard: a per-pixel loop over the map (up to ~4000
+  // graphics_draw_pixel calls, each with real per-call overhead) run on the
+  // very first render at watchface load was slow enough on real hardware to
+  // trip the app watchdog and crash on load — the QEMU emulator doesn't
+  // enforce that timeout as strictly, so it went unnoticed in testing. A
+  // fill_rect per alternating row gives the same ~50% darkening for a
+  // fraction of the draw calls (MAP_H/2 instead of MAP_W*MAP_H/~4).
+  graphics_context_set_fill_color(ctx, COLOR_BG);
+  for (int16_t y = 0; y < MAP_H; y += 2) {
     float x_term = x_top + (x_bottom - x_top) * (y / (float)MAP_H);
-    for (int16_t x = 0; x < MAP_W; x++) {
-      bool in_night = night_on_right ? ((float)x >= x_term) : ((float)x <= x_term);
-      if (!in_night) continue;
-      if (((x + y) & 1) == 0) continue;  // 50% checkerboard
-      graphics_draw_pixel(ctx, GPoint(MAP_X + x, MAP_Y + y));
+    int16_t xt = (int16_t)x_term;
+    if (night_on_right) {
+      int16_t x0 = xt < 0 ? 0 : xt;
+      if (x0 < MAP_W) {
+        graphics_fill_rect(ctx, GRect(MAP_X + x0, MAP_Y + y, MAP_W - x0, 1), 0, GCornerNone);
+      }
+    } else {
+      int16_t x1 = xt > MAP_W ? MAP_W : xt;
+      if (x1 > 0) {
+        graphics_fill_rect(ctx, GRect(MAP_X, MAP_Y + y, x1, 1), 0, GCornerNone);
+      }
     }
   }
 }
