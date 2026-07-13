@@ -1,7 +1,7 @@
 {
   "name": "satellite-tracker",
   "author": "Tane Tatum",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "keywords": ["pebble-app"],
   "private": true,
   "dependencies": {
@@ -34,11 +34,11 @@
     "resources": {
       "media": [
         { "type": "bitmap", "name": "IMAGE_WORLD_MAP", "file": "images/world_map.png" },
-        { "type": "font", "name": "FONT_JBMONO_BOLD_12", "file": "fonts/JetBrainsMono-Bold.ttf" },
-        { "type": "font", "name": "FONT_JBMONO_REGULAR_8", "file": "fonts/JetBrainsMono-Regular.ttf" },
-        { "type": "font", "name": "FONT_JBMONO_BOLD_13", "file": "fonts/JetBrainsMono-Bold.ttf" },
-        { "type": "font", "name": "FONT_JBMONO_BOLD_36", "file": "fonts/JetBrainsMono-Bold.ttf" },
-        { "type": "font", "name": "FONT_JBMONO_REGULAR_9", "file": "fonts/JetBrainsMono-Regular.ttf" }
+        { "type": "font", "name": "FONT_JBMONO_BOLD_12", "file": "fonts/JetBrainsMono-Bold.ttf", "characterRegex": "[A-Z0-9 ()./-]" },
+        { "type": "font", "name": "FONT_JBMONO_REGULAR_8", "file": "fonts/JetBrainsMono-Regular.ttf", "characterRegex": "[A-Z0-9]" },
+        { "type": "font", "name": "FONT_JBMONO_BOLD_13", "file": "fonts/JetBrainsMono-Bold.ttf", "characterRegex": "[0-9NSEWKM.-]" },
+        { "type": "font", "name": "FONT_JBMONO_BOLD_36", "file": "fonts/JetBrainsMono-Bold.ttf", "characterRegex": "[0-9:]" },
+        { "type": "font", "name": "FONT_JBMONO_REGULAR_9", "file": "fonts/JetBrainsMono-Regular.ttf", "characterRegex": "[A-Z0-9 ]" }
       ]
     }
   }
