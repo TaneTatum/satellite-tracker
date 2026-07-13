@@ -47,6 +47,12 @@ module.exports = [
         "messageKey": "ShowTrail",
         "label": "Show Orbit Trail",
         "defaultValue": false
+      },
+      {
+        "type": "toggle",
+        "messageKey": "ShowDayNight",
+        "label": "Show Day/Night",
+        "defaultValue": false
       }
     ]
   },

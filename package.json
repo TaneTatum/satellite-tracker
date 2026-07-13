@@ -1,7 +1,7 @@
 {
   "name": "satellite-tracker",
   "author": "Tane Tatum",
-  "version": "2.1.3",
+  "version": "2.2.0",
   "keywords": ["pebble-app"],
   "private": true,
   "dependencies": {
@@ -23,6 +23,7 @@
       "ShowLatLon",
       "ShowAltitude",
       "ShowTrail",
+      "ShowDayNight",
       "REQUEST_POSITIONS",
       "SatName",
       "BatchStartEpoch",

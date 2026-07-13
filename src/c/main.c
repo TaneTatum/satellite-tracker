@@ -49,6 +49,7 @@ static void prv_default_settings(void) {
   settings.ShowLatLon = true;
   settings.ShowAltitude = true;
   settings.ShowTrail = false;
+  settings.ShowDayNight = false;
 }
 
 static void prv_save_settings(void) {
@@ -120,6 +121,9 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
 
   Tuple *trail_t = dict_find(iterator, MESSAGE_KEY_ShowTrail);
   if (trail_t) { settings.ShowTrail = trail_t->value->int32 == 1; settings_changed = true; }
+
+  Tuple *day_night_t = dict_find(iterator, MESSAGE_KEY_ShowDayNight);
+  if (day_night_t) { settings.ShowDayNight = day_night_t->value->int32 == 1; settings_changed = true; }
 
   if (settings_changed) {
     prv_save_settings();

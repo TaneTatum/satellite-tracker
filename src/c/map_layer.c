@@ -45,6 +45,8 @@ static float terminator_lon_deg(float lon_ss_deg, float decl_deg, float lat_deg)
 }
 
 static void draw_night_terminator(GContext *ctx) {
+  if (!settings.ShowDayNight) return;
+
   time_t temp = time(NULL);
   struct tm *utc = gmtime(&temp);
   if (!utc) return;
@@ -67,29 +69,39 @@ static void draw_night_terminator(GContext *ctx) {
   float x_ss = (lon_ss + 180.0f) * MAP_W / 360.0f;
   bool night_on_right = x_ss < (MAP_W / 2.0f);
 
-  // Horizontal-line dither (alternating scanlines) rather than a per-pixel
-  // checkerboard: a per-pixel loop over the map (up to ~4000
-  // graphics_draw_pixel calls, each with real per-call overhead) run on the
-  // very first render at watchface load was slow enough on real hardware to
-  // trip the app watchdog and crash on load — the QEMU emulator doesn't
-  // enforce that timeout as strictly, so it went unnoticed in testing. A
-  // fill_rect per alternating row gives the same ~50% darkening for a
-  // fraction of the draw calls (MAP_H/2 instead of MAP_W*MAP_H/~4).
+  // Solid fill on the night side (every row, not just alternating — still
+  // just one fill_rect call per row, so no per-pixel cost) plus a bright
+  // polyline tracing the actual terminator edge, so day/night reads clearly
+  // at a glance instead of the old barely-visible dither. Both the fill and
+  // the line clamp x to [0,MAP_W] per row so they never draw outside the
+  // map even when the terminator's projected x briefly exceeds it.
   graphics_context_set_fill_color(ctx, COLOR_BG);
-  for (int16_t y = 0; y < MAP_H; y += 2) {
+  graphics_context_set_stroke_color(ctx, COLOR_BRIGHT);
+  graphics_context_set_stroke_width(ctx, 1);
+
+  GPoint prev_edge = GPoint(0, 0);
+  bool have_prev = false;
+  for (int16_t y = 0; y < MAP_H; y++) {
     float x_term = x_top + (x_bottom - x_top) * (y / (float)MAP_H);
     int16_t xt = (int16_t)x_term;
+    int16_t xc = xt < 0 ? 0 : (xt > MAP_W ? MAP_W : xt);
+
     if (night_on_right) {
-      int16_t x0 = xt < 0 ? 0 : xt;
-      if (x0 < MAP_W) {
-        graphics_fill_rect(ctx, GRect(MAP_X + x0, MAP_Y + y, MAP_W - x0, 1), 0, GCornerNone);
+      if (xc < MAP_W) {
+        graphics_fill_rect(ctx, GRect(MAP_X + xc, MAP_Y + y, MAP_W - xc, 1), 0, GCornerNone);
       }
     } else {
-      int16_t x1 = xt > MAP_W ? MAP_W : xt;
-      if (x1 > 0) {
-        graphics_fill_rect(ctx, GRect(MAP_X, MAP_Y + y, x1, 1), 0, GCornerNone);
+      if (xc > 0) {
+        graphics_fill_rect(ctx, GRect(MAP_X, MAP_Y + y, xc, 1), 0, GCornerNone);
       }
     }
+
+    GPoint edge = GPoint(MAP_X + xc, MAP_Y + y);
+    if (have_prev) {
+      graphics_draw_line(ctx, prev_edge, edge);
+    }
+    prev_edge = edge;
+    have_prev = true;
   }
 }
 

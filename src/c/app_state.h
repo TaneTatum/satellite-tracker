@@ -25,6 +25,7 @@ typedef struct {
   bool ShowLatLon;
   bool ShowAltitude;
   bool ShowTrail;
+  bool ShowDayNight;
 } ClaySettings;
 
 typedef struct {
